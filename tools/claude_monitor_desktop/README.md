@@ -56,16 +56,16 @@ BTN=DENY
 
 ## 可分发文件
 
-便携发布目录：
+本地发布目录：
 
 ```text
 D:\gd32c231c\tools\claude_monitor_desktop\publish\win-x64
 ```
 
-压缩包：
+仓库对外发布压缩包：
 
 ```text
-D:\gd32c231c\tools\claude_monitor_desktop\ClaudeBoardMonitor-win-x64.zip
+D:\gd32c231c\release\ClaudeBoardMonitor-win-x64.zip
 ```
 
 分享给别人时发这个 zip，不要发 `bin` 或 `obj` 里的中间产物。

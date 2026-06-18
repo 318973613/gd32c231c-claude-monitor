@@ -14,6 +14,7 @@
 *.iex
 Listings/
 Objects/
+*.log
 
 # IAR
 settings/
@@ -33,6 +34,35 @@ desktop.ini
 # IDE
 .vscode/
 .idea/
+
+# Local agent / scratch state
+.claude/
+.omx/
+claude_test/
+picture/
+
+# Vendor reference archives and downloaded research clones
+demo/
+third_party/
+tools/claude_monitor_research/
+tools/claude_monitor/
+project/GD32C231C_EVAL_Demo_Suites/
+
+# .NET build and publish intermediates
+tools/claude_monitor_desktop/bin/
+tools/claude_monitor_desktop/obj/
+tools/claude_monitor_desktop/publish/
+tools/claude_monitor_desktop/layout_check*.png
+tools/claude_monitor_hook/bin/
+tools/claude_monitor_hook/obj/
+*.pdb
+
+# Keep distributable artifacts only in release/
+*.zip
+!release/
+!release/*.zip
+!release/firmware/
+!release/firmware/*.hex
 
 # Temp files
 *.tmp
