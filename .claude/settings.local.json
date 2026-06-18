@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(py --version)",
+      "Bash(python3 -c \"from PIL import Image; print\\('pillow ok'\\)\")",
+      "Bash(python3 -c \"import moviepy; print\\('moviepy ok'\\)\")",
+      "Bash(python3 -c \"import cv2; print\\('opencv ok'\\)\")",
+      "Bash(python3 -c \"import imageio; print\\('imageio ok'\\)\")",
+      "Bash(python3 -m pip install Pillow imageio --quiet)",
+      "Bash(py -m pip install Pillow imageio --quiet)",
+      "Bash(cmd.exe *)",
+      "Bash(py -m pip install av --quiet)",
+      "Bash(py *)",
+      "Bash(git init *)",
+      "Bash(git remote *)",
+      "Bash(git add *)"
+    ]
+  }
+}

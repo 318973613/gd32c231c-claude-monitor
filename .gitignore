@@ -1,0 +1,39 @@
+# Keil MDK
+*.uvguix.*
+*.bak
+*.dep
+*.crf
+*.d
+*.o
+*.lst
+*.htm
+*.lnp
+*.sct
+*.axf
+*.build_log.htm
+*.iex
+Listings/
+Objects/
+
+# IAR
+settings/
+Debug/
+Release/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+
+# Temp files
+*.tmp
+*.swp
