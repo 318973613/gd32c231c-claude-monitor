@@ -84,7 +84,8 @@ static void gui_task(void *argument)
         app_led_effect_update(now,
                               clock_snapshot.valid,
                               (DHT11_OK == sensor_snapshot.status) ? 1U : 0U,
-                              (uint8_t)(rx_event | button_event));
+                              (uint8_t)(rx_event | button_event),
+                              ai_snapshot.mode);
 
         if((now - last_update) >= pdMS_TO_TICKS(GUI_UPDATE_PERIOD_MS)) {
             last_update = now;

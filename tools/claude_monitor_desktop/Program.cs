@@ -13,6 +13,18 @@ internal static class Program
             Environment.Exit(HookClient.RunAsync().GetAwaiter().GetResult());
             return;
         }
+        if (Environment.GetCommandLineArgs().Any(arg => arg.Equals("--statusline", StringComparison.OrdinalIgnoreCase)))
+        {
+            Environment.Exit(HookClient.RunStatusLineAsync().GetAwaiter().GetResult());
+            return;
+        }
+        if (Environment.GetCommandLineArgs().Any(arg => arg.Equals("--install-hooks", StringComparison.OrdinalIgnoreCase)))
+        {
+            var state = new MonitorState();
+            HookSettingsInstaller.Install(state);
+            Environment.Exit(0);
+            return;
+        }
 
         ApplicationConfiguration.Initialize();
         Application.Run(new MainForm());

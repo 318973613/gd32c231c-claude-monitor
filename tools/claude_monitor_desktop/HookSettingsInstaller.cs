@@ -25,9 +25,20 @@ internal static class HookSettingsInstaller
             }
             var root = JsonNode.Parse(File.ReadAllText(SettingsPath)) as JsonObject;
             var hooks = root?["hooks"] as JsonObject;
-            var text = hooks?.ToJsonString() ?? "";
-            return text.Contains("ClaudeBoardHook", StringComparison.OrdinalIgnoreCase) ||
-                   text.Contains("claude_hook.py", StringComparison.OrdinalIgnoreCase);
+            var statusLine = root?["statusLine"] as JsonObject;
+            if (hooks is null || statusLine is null)
+            {
+                return false;
+            }
+
+            var hookText = hooks.ToJsonString();
+            var statusText = statusLine.ToJsonString();
+            var hasHook = hookText.Contains("ClaudeBoardHook", StringComparison.OrdinalIgnoreCase);
+            var hasStatusLine = statusText.Contains("ClaudeBoardHook", StringComparison.OrdinalIgnoreCase) &&
+                                statusText.Contains("--statusline", StringComparison.OrdinalIgnoreCase);
+            var hasAllPreToolUse = hookText.Contains("\"PreToolUse\"", StringComparison.OrdinalIgnoreCase) &&
+                                   HasMatcher(hooks, "PreToolUse", "*");
+            return hasHook && hasStatusLine && hasAllPreToolUse;
         }
         catch
         {
@@ -54,16 +65,61 @@ internal static class HookSettingsInstaller
 
         var command = BuildHookCommand();
         UpsertEvent(hooks, "UserPromptSubmit", "*", command, 10);
-        UpsertEvent(hooks, "PreToolUse", "Bash|Write|Edit|MultiEdit|NotebookEdit", command, 120);
+        UpsertEvent(hooks, "PreToolUse", "*", command, 120);
         UpsertEvent(hooks, "PermissionRequest", "*", command, 120);
         UpsertEvent(hooks, "PostToolUse", "*", command, 10);
         UpsertEvent(hooks, "PostToolUseFailure", "*", command, 10);
         UpsertEvent(hooks, "Notification", "*", command, 10);
         UpsertEvent(hooks, "Stop", "*", command, 10);
+        root["statusLine"] = BuildStatusLineConfig();
 
         File.WriteAllText(SettingsPath, root.ToJsonString(JsonOptions));
         state.HooksInstalled = true;
         state.AddEvent("system", "Claude hooks installed", SettingsPath, "Monitor");
+    }
+
+    public static string GetConfiguredModel()
+    {
+        try
+        {
+            if (!File.Exists(SettingsPath))
+            {
+                return "";
+            }
+
+            var root = JsonNode.Parse(File.ReadAllText(SettingsPath)) as JsonObject;
+            var model = root?["model"]?.GetValue<string>() ?? "";
+            if (!string.IsNullOrWhiteSpace(model))
+            {
+                return model;
+            }
+
+            var env = root?["env"] as JsonObject;
+            return env?["ANTHROPIC_MODEL"]?.GetValue<string>() ?? "";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static bool HasMatcher(JsonObject hooks, string eventName, string matcher)
+    {
+        if (hooks[eventName] is not JsonArray eventHooks)
+        {
+            return false;
+        }
+
+        foreach (var item in eventHooks)
+        {
+            if (item is JsonObject group &&
+                string.Equals(group["matcher"]?.GetValue<string>(), matcher, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void UpsertEvent(JsonObject hooks, string eventName, string matcher, string command, int timeout)
@@ -109,5 +165,16 @@ internal static class HookSettingsInstaller
     {
         var exe = Path.Combine(AppContext.BaseDirectory, "ClaudeBoardHook.exe");
         return $"\"{exe}\" --hook";
+    }
+
+    private static JsonObject BuildStatusLineConfig()
+    {
+        var exe = Path.Combine(AppContext.BaseDirectory, "ClaudeBoardHook.exe");
+        return new JsonObject
+        {
+            ["type"] = "command",
+            ["command"] = $"\"{exe}\" --statusline",
+            ["padding"] = 0
+        };
     }
 }

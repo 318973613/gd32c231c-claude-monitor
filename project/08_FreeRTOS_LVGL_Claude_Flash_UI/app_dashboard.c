@@ -21,6 +21,7 @@
 
 static uint16_t fill_line[LCD_W];
 static app_asset_status_t asset_status = APP_ASSET_HEADER_ERROR;
+static uint8_t last_active_screen = 0xFFU;
 static uint8_t last_working = 0xFFU;
 static uint8_t anim_frame = 0U;
 static uint8_t anim_divider = 0U;
@@ -29,6 +30,18 @@ static uint32_t last_seconds = 0xFFFFFFFFU;
 static uint32_t last_sample = 0xFFFFFFFFU;
 static uint32_t last_error = 0xFFFFFFFFU;
 static uint32_t last_rx = 0xFFFFFFFFU;
+static uint32_t last_ai_event = 0xFFFFFFFFU;
+static app_ai_mode_t last_ai_mode = (app_ai_mode_t)0xFFU;
+static char last_model[16] = "";
+static char last_tool[12] = "";
+static uint8_t last_context_used = 0xFFU;
+static uint8_t last_context_remaining = 0xFFU;
+static uint8_t last_limit_used = 0xFFU;
+static uint8_t last_limit_remaining = 0xFFU;
+static uint16_t last_cost_usd_cents = 0xFFFFU;
+static uint8_t last_has_context = 0xFFU;
+static uint8_t last_has_limit = 0xFFU;
+static uint8_t last_has_cost = 0xFFU;
 static dht11_status_t last_dht_status = DHT11_ERROR_CHECKSUM;
 static dht11_data_t last_dht_data = {0U, 0U, 0U, 0U};
 
@@ -42,6 +55,10 @@ static void draw_clock_colon(uint16_t x, uint16_t y, uint16_t color);
 static void draw_clock_number2(uint16_t x, uint16_t y, uint8_t value, uint16_t color);
 static void draw_tiny_digit(uint16_t x, uint16_t y, uint8_t digit, uint16_t color);
 static void draw_tiny_number3(uint16_t x, uint16_t y, uint16_t value, uint16_t color);
+static void draw_tiny_number2(uint16_t x, uint16_t y, uint8_t value, uint16_t color);
+static void draw_tiny_money(uint16_t x, uint16_t y, uint16_t cents, uint16_t color);
+static void draw_tiny_char(uint16_t x, uint16_t y, char ch, uint16_t color);
+static void draw_tiny_text(uint16_t x, uint16_t y, const char *text, uint16_t color, uint8_t max_chars);
 static void draw_status_icon(uint8_t working, uint8_t frame);
 static void draw_status_animation(uint8_t working, uint8_t frame);
 static void draw_idle_icon(void);
@@ -51,7 +68,12 @@ static void draw_work_animation(uint8_t frame);
 static void draw_clock(uint32_t seconds, uint8_t valid);
 static void draw_sensor(const app_sensor_state_t *sensor);
 static void draw_counters(const app_sensor_state_t *sensor, const app_clock_state_t *clock);
+static void draw_ai_status(const app_ai_state_t *ai);
+static const char *mode_text(app_ai_mode_t mode);
+static uint16_t mode_color(app_ai_mode_t mode);
 static void draw_static_overlay(void);
+static void draw_work_overlay(void);
+static void invalidate_dynamic_cache(void);
 
 void app_dashboard_init(void)
 {
@@ -84,16 +106,28 @@ void app_dashboard_update(const app_sensor_state_t *sensor,
                           const app_ai_state_t *ai)
 {
     uint8_t ai_working;
+    uint8_t active_screen;
+    app_ai_mode_t mode;
 
     if((NULL == sensor) || (NULL == clock)) {
         return;
     }
 
-    ai_working = 0U;
-    if(NULL != ai) {
-        if((APP_AI_WORKING == ai->mode) || (APP_AI_WAIT_APPROVE == ai->mode)) {
-            ai_working = 1U;
+    mode = (NULL != ai) ? ai->mode : APP_AI_IDLE;
+    active_screen = (APP_AI_IDLE != mode) ? 1U : 0U;
+    if(last_active_screen != active_screen) {
+        if(0U != active_screen) {
+            draw_work_overlay();
+        } else {
+            draw_static_overlay();
         }
+        invalidate_dynamic_cache();
+        last_active_screen = active_screen;
+    }
+
+    ai_working = 0U;
+    if(0U != active_screen) {
+        ai_working = 1U;
     }
 
     if(last_working != ai_working) {
@@ -115,20 +149,51 @@ void app_dashboard_update(const app_sensor_state_t *sensor,
         last_seconds = clock->seconds;
     }
 
-    if((last_dht_status != sensor->status) ||
-       (0 != memcmp(&last_dht_data, &sensor->data, sizeof(last_dht_data)))) {
-        draw_sensor(sensor);
-        last_dht_status = sensor->status;
-        last_dht_data = sensor->data;
+    if(0U == active_screen) {
+        if((last_dht_status != sensor->status) ||
+           (0 != memcmp(&last_dht_data, &sensor->data, sizeof(last_dht_data)))) {
+            draw_sensor(sensor);
+            last_dht_status = sensor->status;
+            last_dht_data = sensor->data;
+        }
+
+        if((last_sample != sensor->sample_count) ||
+           (last_error != sensor->error_count) ||
+           (last_rx != clock->rx_count)) {
+            draw_counters(sensor, clock);
+            last_sample = sensor->sample_count;
+            last_error = sensor->error_count;
+            last_rx = clock->rx_count;
+        }
     }
 
-    if((last_sample != sensor->sample_count) ||
-       (last_error != sensor->error_count) ||
-       (last_rx != clock->rx_count)) {
-        draw_counters(sensor, clock);
-        last_sample = sensor->sample_count;
-        last_error = sensor->error_count;
-        last_rx = clock->rx_count;
+    if((NULL != ai) && (0U != active_screen)) {
+        if((last_ai_mode != ai->mode) ||
+           (last_ai_event != ai->event_count) ||
+           (0 != memcmp(last_model, ai->model, sizeof(last_model))) ||
+           (0 != memcmp(last_tool, ai->tool, sizeof(last_tool))) ||
+           (last_context_used != ai->context_used_percent) ||
+           (last_context_remaining != ai->context_remaining_percent) ||
+           (last_limit_used != ai->limit_used_percent) ||
+           (last_limit_remaining != ai->limit_remaining_percent) ||
+           (last_cost_usd_cents != ai->cost_usd_cents) ||
+           (last_has_context != ai->has_context) ||
+           (last_has_limit != ai->has_limit) ||
+           (last_has_cost != ai->has_cost)) {
+            draw_ai_status(ai);
+            last_ai_mode = ai->mode;
+            last_ai_event = ai->event_count;
+            (void)memcpy(last_model, ai->model, sizeof(last_model));
+            (void)memcpy(last_tool, ai->tool, sizeof(last_tool));
+            last_context_used = ai->context_used_percent;
+            last_context_remaining = ai->context_remaining_percent;
+            last_limit_used = ai->limit_used_percent;
+            last_limit_remaining = ai->limit_remaining_percent;
+            last_cost_usd_cents = ai->cost_usd_cents;
+            last_has_context = ai->has_context;
+            last_has_limit = ai->has_limit;
+            last_has_cost = ai->has_cost;
+        }
     }
 }
 
@@ -138,6 +203,7 @@ static void draw_static_overlay(void)
     fill_rect(30U, 34U, 180U, 2U, COLOR_ORANGE);
     fill_rect(30U, 39U, 180U, 3U, (APP_ASSET_OK == asset_status) ? COLOR_CYAN : COLOR_RED);
 
+    fill_rect(30U, 196U, 180U, 122U, COLOR_BG);
     fill_rect(36U, 224U, 58U, 27U, COLOR_PANEL_2);
     fill_rect(108U, 224U, 80U, 27U, COLOR_PANEL_2);
     fill_rect(38U, 267U, 160U, 12U, COLOR_PANEL_2);
@@ -151,6 +217,22 @@ static void draw_static_overlay(void)
     }
 
     draw_status_icon(0U, 0U);
+}
+
+static void draw_work_overlay(void)
+{
+    fill_rect(34U, 38U, 172U, 40U, COLOR_PANEL);
+    fill_rect(30U, 34U, 180U, 2U, COLOR_ORANGE);
+    fill_rect(30U, 39U, 180U, 3U, COLOR_CYAN);
+
+    fill_rect(30U, 196U, 180U, 122U, COLOR_BG);
+    fill_rect(38U, 198U, 164U, 28U, COLOR_PANEL);
+    fill_rect(38U, 232U, 164U, 22U, COLOR_PANEL_2);
+    fill_rect(38U, 260U, 164U, 22U, COLOR_PANEL_2);
+    fill_rect(38U, 288U, 164U, 22U, COLOR_PANEL_2);
+
+    draw_clock(0U, 0U);
+    draw_status_icon(1U, 0U);
 }
 
 static void draw_status_icon(uint8_t working, uint8_t frame)
@@ -359,6 +441,127 @@ static void draw_counters(const app_sensor_state_t *sensor, const app_clock_stat
     draw_tiny_number3(154U, 268U, (uint16_t)(clock->rx_count % 1000U), COLOR_ORANGE);
 }
 
+static void draw_ai_status(const app_ai_state_t *ai)
+{
+    uint16_t color;
+
+    if(NULL == ai) {
+        return;
+    }
+
+    color = mode_color(ai->mode);
+
+    fill_rect(38U, 198U, 164U, 28U, COLOR_PANEL);
+    fill_rect(42U, 201U, 156U, 5U, color);
+    if(APP_AI_WAIT_APPROVE == ai->mode) {
+        draw_tiny_text(48U, 212U, "PA0 OK PA4 NO", COLOR_YELLOW, 14U);
+    } else if(APP_AI_NATIVE_APPROVE == ai->mode) {
+        draw_tiny_text(48U, 212U, "TERM 123", COLOR_CYAN, 8U);
+    } else {
+        draw_tiny_text(48U, 212U, mode_text(ai->mode), color, 7U);
+    }
+    if(APP_AI_WORKING == ai->mode) {
+        draw_tiny_text(104U, 212U, ai->tool, COLOR_CYAN, 10U);
+    }
+
+    fill_rect(38U, 232U, 164U, 22U, COLOR_PANEL_2);
+    draw_tiny_text(42U, 238U, "M:", COLOR_TEXT, 2U);
+    draw_tiny_text(58U, 238U, ai->model, COLOR_CYAN, 16U);
+
+    fill_rect(38U, 260U, 164U, 22U, COLOR_PANEL_2);
+    draw_tiny_text(42U, 266U, "CTX", COLOR_TEXT, 3U);
+    if(0U != ai->has_context) {
+        draw_tiny_number3(74U, 266U, ai->context_used_percent, COLOR_ORANGE);
+        draw_tiny_char(100U, 266U, '%', COLOR_ORANGE);
+        draw_tiny_text(112U, 266U, "R", COLOR_TEXT, 1U);
+        draw_tiny_number3(124U, 266U, ai->context_remaining_percent, COLOR_GREEN);
+        draw_tiny_char(150U, 266U, '%', COLOR_GREEN);
+    } else {
+        draw_tiny_text(74U, 266U, "---", COLOR_ORANGE_DIM, 3U);
+    }
+
+    fill_rect(38U, 288U, 164U, 22U, COLOR_PANEL_2);
+    if(0U != ai->has_cost) {
+        draw_tiny_text(42U, 294U, "USD", COLOR_TEXT, 3U);
+        draw_tiny_money(74U, 294U, ai->cost_usd_cents, COLOR_GREEN);
+    } else if(0U != ai->has_limit) {
+        draw_tiny_text(42U, 294U, "LIM", COLOR_TEXT, 3U);
+        draw_tiny_number3(74U, 294U, ai->limit_used_percent, COLOR_RED);
+        draw_tiny_char(100U, 294U, '%', COLOR_RED);
+        draw_tiny_text(112U, 294U, "R", COLOR_TEXT, 1U);
+        draw_tiny_number3(124U, 294U, ai->limit_remaining_percent, COLOR_GREEN);
+        draw_tiny_char(150U, 294U, '%', COLOR_GREEN);
+    } else {
+        draw_tiny_text(42U, 294U, "USD", COLOR_TEXT, 3U);
+        draw_tiny_text(74U, 294U, "---", COLOR_ORANGE_DIM, 3U);
+    }
+}
+
+static const char *mode_text(app_ai_mode_t mode)
+{
+    switch(mode) {
+    case APP_AI_WORKING:
+        return "WORK";
+    case APP_AI_NATIVE_APPROVE:
+        return "TERM";
+    case APP_AI_WAIT_APPROVE:
+        return "WAIT";
+    case APP_AI_APPROVED:
+        return "ALLOW";
+    case APP_AI_DENIED:
+        return "DENY";
+    case APP_AI_ERROR:
+        return "ERROR";
+    case APP_AI_IDLE:
+    default:
+        return "IDLE";
+    }
+}
+
+static uint16_t mode_color(app_ai_mode_t mode)
+{
+    switch(mode) {
+    case APP_AI_WORKING:
+        return COLOR_CYAN;
+    case APP_AI_NATIVE_APPROVE:
+        return COLOR_CYAN;
+    case APP_AI_WAIT_APPROVE:
+        return COLOR_YELLOW;
+    case APP_AI_APPROVED:
+        return COLOR_GREEN;
+    case APP_AI_DENIED:
+    case APP_AI_ERROR:
+        return COLOR_RED;
+    case APP_AI_IDLE:
+    default:
+        return COLOR_ORANGE;
+    }
+}
+
+static void invalidate_dynamic_cache(void)
+{
+    last_working = 0xFFU;
+    last_valid = 0xFFU;
+    last_seconds = 0xFFFFFFFFU;
+    last_sample = 0xFFFFFFFFU;
+    last_error = 0xFFFFFFFFU;
+    last_rx = 0xFFFFFFFFU;
+    last_ai_event = 0xFFFFFFFFU;
+    last_ai_mode = (app_ai_mode_t)0xFFU;
+    last_model[0] = '\0';
+    last_tool[0] = '\0';
+    last_context_used = 0xFFU;
+    last_context_remaining = 0xFFU;
+    last_limit_used = 0xFFU;
+    last_limit_remaining = 0xFFU;
+    last_cost_usd_cents = 0xFFFFU;
+    last_has_context = 0xFFU;
+    last_has_limit = 0xFFU;
+    last_has_cost = 0xFFU;
+    last_dht_status = DHT11_ERROR_CHECKSUM;
+    (void)memset(&last_dht_data, 0xFF, sizeof(last_dht_data));
+}
+
 static void draw_number2(uint16_t x, uint16_t y, uint8_t value, uint16_t color, uint8_t scale)
 {
     draw_digit(x, y, (uint8_t)(value / 10U), color, scale);
@@ -444,6 +647,26 @@ static void draw_tiny_number3(uint16_t x, uint16_t y, uint16_t value, uint16_t c
     draw_tiny_digit((uint16_t)(x + 16U), y, (uint8_t)(value % 10U), color);
 }
 
+static void draw_tiny_number2(uint16_t x, uint16_t y, uint8_t value, uint16_t color)
+{
+    draw_tiny_digit(x, y, (uint8_t)((value / 10U) % 10U), color);
+    draw_tiny_digit((uint16_t)(x + 8U), y, (uint8_t)(value % 10U), color);
+}
+
+static void draw_tiny_money(uint16_t x, uint16_t y, uint16_t cents, uint16_t color)
+{
+    uint16_t dollars = (uint16_t)(cents / 100U);
+    uint8_t cent_part = (uint8_t)(cents % 100U);
+
+    if(dollars > 999U) {
+        dollars = 999U;
+    }
+
+    draw_tiny_number3(x, y, dollars, color);
+    draw_tiny_char((uint16_t)(x + 24U), y, '.', color);
+    draw_tiny_number2((uint16_t)(x + 32U), y, cent_part, color);
+}
+
 static void draw_tiny_digit(uint16_t x, uint16_t y, uint8_t digit, uint16_t color)
 {
     static const uint8_t glyphs[10][5] = {
@@ -468,6 +691,78 @@ static void draw_tiny_digit(uint16_t x, uint16_t y, uint8_t digit, uint16_t colo
     for(row = 0U; row < 5U; row++) {
         for(col = 0U; col < 3U; col++) {
             if(0U != (glyphs[digit][row] & (uint8_t)(1U << (2U - col)))) {
+                fill_rect((uint16_t)(x + (col * 2U)), (uint16_t)(y + (row * 2U)), 2U, 2U, color);
+            }
+        }
+    }
+}
+
+static void draw_tiny_text(uint16_t x, uint16_t y, const char *text, uint16_t color, uint8_t max_chars)
+{
+    uint8_t count = 0U;
+
+    if(NULL == text) {
+        return;
+    }
+
+    while(('\0' != *text) && (count < max_chars)) {
+        draw_tiny_char((uint16_t)(x + (count * 8U)), y, *text, color);
+        text++;
+        count++;
+    }
+}
+
+static void draw_tiny_char(uint16_t x, uint16_t y, char ch, uint16_t color)
+{
+    uint8_t rows[5] = {0U, 0U, 0U, 0U, 0U};
+    uint8_t row;
+    uint8_t col;
+
+    if((ch >= '0') && (ch <= '9')) {
+        draw_tiny_digit(x, y, (uint8_t)(ch - '0'), color);
+        return;
+    }
+
+    switch(ch) {
+    case 'A': rows[0]=0x02U; rows[1]=0x05U; rows[2]=0x07U; rows[3]=0x05U; rows[4]=0x05U; break;
+    case 'B': rows[0]=0x06U; rows[1]=0x05U; rows[2]=0x06U; rows[3]=0x05U; rows[4]=0x06U; break;
+    case 'C': rows[0]=0x07U; rows[1]=0x04U; rows[2]=0x04U; rows[3]=0x04U; rows[4]=0x07U; break;
+    case 'D': rows[0]=0x06U; rows[1]=0x05U; rows[2]=0x05U; rows[3]=0x05U; rows[4]=0x06U; break;
+    case 'E': rows[0]=0x07U; rows[1]=0x04U; rows[2]=0x06U; rows[3]=0x04U; rows[4]=0x07U; break;
+    case 'F': rows[0]=0x07U; rows[1]=0x04U; rows[2]=0x06U; rows[3]=0x04U; rows[4]=0x04U; break;
+    case 'G': rows[0]=0x07U; rows[1]=0x04U; rows[2]=0x05U; rows[3]=0x05U; rows[4]=0x07U; break;
+    case 'H': rows[0]=0x05U; rows[1]=0x05U; rows[2]=0x07U; rows[3]=0x05U; rows[4]=0x05U; break;
+    case 'I': rows[0]=0x07U; rows[1]=0x02U; rows[2]=0x02U; rows[3]=0x02U; rows[4]=0x07U; break;
+    case 'J': rows[0]=0x01U; rows[1]=0x01U; rows[2]=0x01U; rows[3]=0x05U; rows[4]=0x07U; break;
+    case 'K': rows[0]=0x05U; rows[1]=0x05U; rows[2]=0x06U; rows[3]=0x05U; rows[4]=0x05U; break;
+    case 'L': rows[0]=0x04U; rows[1]=0x04U; rows[2]=0x04U; rows[3]=0x04U; rows[4]=0x07U; break;
+    case 'M': rows[0]=0x05U; rows[1]=0x07U; rows[2]=0x07U; rows[3]=0x05U; rows[4]=0x05U; break;
+    case 'N': rows[0]=0x05U; rows[1]=0x07U; rows[2]=0x07U; rows[3]=0x07U; rows[4]=0x05U; break;
+    case 'O': rows[0]=0x07U; rows[1]=0x05U; rows[2]=0x05U; rows[3]=0x05U; rows[4]=0x07U; break;
+    case 'P': rows[0]=0x07U; rows[1]=0x05U; rows[2]=0x07U; rows[3]=0x04U; rows[4]=0x04U; break;
+    case 'Q': rows[0]=0x07U; rows[1]=0x05U; rows[2]=0x05U; rows[3]=0x07U; rows[4]=0x01U; break;
+    case 'R': rows[0]=0x07U; rows[1]=0x05U; rows[2]=0x07U; rows[3]=0x06U; rows[4]=0x05U; break;
+    case 'S': rows[0]=0x07U; rows[1]=0x04U; rows[2]=0x07U; rows[3]=0x01U; rows[4]=0x07U; break;
+    case 'T': rows[0]=0x07U; rows[1]=0x02U; rows[2]=0x02U; rows[3]=0x02U; rows[4]=0x02U; break;
+    case 'U': rows[0]=0x05U; rows[1]=0x05U; rows[2]=0x05U; rows[3]=0x05U; rows[4]=0x07U; break;
+    case 'V': rows[0]=0x05U; rows[1]=0x05U; rows[2]=0x05U; rows[3]=0x05U; rows[4]=0x02U; break;
+    case 'W': rows[0]=0x05U; rows[1]=0x05U; rows[2]=0x07U; rows[3]=0x07U; rows[4]=0x05U; break;
+    case 'X': rows[0]=0x05U; rows[1]=0x05U; rows[2]=0x02U; rows[3]=0x05U; rows[4]=0x05U; break;
+    case 'Y': rows[0]=0x05U; rows[1]=0x05U; rows[2]=0x02U; rows[3]=0x02U; rows[4]=0x02U; break;
+    case 'Z': rows[0]=0x07U; rows[1]=0x01U; rows[2]=0x02U; rows[3]=0x04U; rows[4]=0x07U; break;
+    case '-': rows[2]=0x07U; break;
+    case '_': rows[4]=0x07U; break;
+    case '.': rows[4]=0x02U; break;
+    case ':': rows[1]=0x02U; rows[3]=0x02U; break;
+    case '%': rows[0]=0x05U; rows[1]=0x01U; rows[2]=0x02U; rows[3]=0x04U; rows[4]=0x05U; break;
+    case ' ':
+    default:
+        return;
+    }
+
+    for(row = 0U; row < 5U; row++) {
+        for(col = 0U; col < 3U; col++) {
+            if(0U != (rows[row] & (uint8_t)(1U << (2U - col)))) {
                 fill_rect((uint16_t)(x + (col * 2U)), (uint16_t)(y + (row * 2U)), 2U, 2U, color);
             }
         }

@@ -45,7 +45,11 @@ void app_led_effect_init(void)
     led_mask_write(0x00U);
 }
 
-void app_led_effect_update(TickType_t now, uint8_t clock_valid, uint8_t dht_ok, uint8_t rx_event)
+void app_led_effect_update(TickType_t now,
+                           uint8_t clock_valid,
+                           uint8_t dht_ok,
+                           uint8_t rx_event,
+                           app_ai_mode_t ai_mode)
 {
     static TickType_t last_tick = 0U;
     static uint8_t pattern_index = 0U;
@@ -60,9 +64,30 @@ void app_led_effect_update(TickType_t now, uint8_t clock_valid, uint8_t dht_ok, 
     }
     last_tick = now;
 
-    if(rx_spark_frames > 0U) {
+    if(APP_AI_ERROR == ai_mode) {
+        mask = (0U != (pattern_index & 0x01U)) ? 0x0FU : 0x00U;
+        pattern_index++;
+    } else if(APP_AI_NATIVE_APPROVE == ai_mode) {
+        mask = (0U != (pattern_index & 0x01U)) ? 0x05U : 0x0AU;
+        pattern_index++;
+    } else if(APP_AI_WAIT_APPROVE == ai_mode) {
+        mask = (0U != (pattern_index & 0x01U)) ? 0x03U : 0x0CU;
+        pattern_index++;
+    } else if(APP_AI_DENIED == ai_mode) {
+        mask = (0U != (pattern_index & 0x01U)) ? 0x08U : 0x00U;
+        pattern_index++;
+    } else if(APP_AI_APPROVED == ai_mode) {
+        mask = (0U != (pattern_index & 0x01U)) ? 0x0FU : 0x06U;
+        pattern_index++;
+    } else if(rx_spark_frames > 0U) {
         rx_spark_frames--;
         mask = (0U != (rx_spark_frames & 0x01U)) ? 0x0FU : 0x05U;
+    } else if(APP_AI_WORKING == ai_mode) {
+        mask = flow_pattern[pattern_index];
+        pattern_index++;
+        if(pattern_index >= (sizeof(flow_pattern) / sizeof(flow_pattern[0]))) {
+            pattern_index = 0U;
+        }
     } else if(0U == clock_valid) {
         mask = (0U != (pattern_index & 0x01U)) ? 0x09U : 0x06U;
         pattern_index++;
@@ -70,9 +95,9 @@ void app_led_effect_update(TickType_t now, uint8_t clock_valid, uint8_t dht_ok, 
         mask = (0U != (pattern_index & 0x01U)) ? 0x0FU : 0x00U;
         pattern_index++;
     } else {
-        mask = flow_pattern[pattern_index];
+        mask = (0U == (pattern_index & 0x07U)) ? 0x01U : 0x00U;
         pattern_index++;
-        if(pattern_index >= (sizeof(flow_pattern) / sizeof(flow_pattern[0]))) {
+        if(pattern_index >= 16U) {
             pattern_index = 0U;
         }
     }

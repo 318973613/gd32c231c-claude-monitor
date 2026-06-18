@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude 图标</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a1a1a;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        .container {
+            text-align: center;
+        }
+        svg {
+            filter: drop-shadow(0 0 20px rgba(212, 165, 116, 0.3));
+        }
+        .title {
+            color: #D4A574;
+            font-size: 32px;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+        .subtitle {
+            color: #888;
+            font-size: 16px;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <svg width="300" height="300" viewBox="-150 -150 300 300" xmlns="http://www.w3.org/2000/svg">
+            <!-- Claude 主色调 -->
+            <defs>
+                <radialGradient id="claudeGrad" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" style="stop-color:#E8C4A0"/>
+                    <stop offset="100%" style="stop-color:#D4A574"/>
+                </radialGradient>
+            </defs>
+
+            <!-- 中心圆 -->
+            <circle cx="0" cy="0" r="80" fill="url(#claudeGrad)" stroke="#C4956A" stroke-width="3"/>
+
+            <!-- 射线图案 - Claude 标志性设计 -->
+            <g stroke="#D4A574" stroke-linecap="round">
+                <!-- 长射线 (每30度一根) -->
+                <line x1="0" y1="-85" x2="0" y2="-125" stroke-width="6"/>
+                <line x1="42.5" y1="-73.6" x2="62.5" y2="-108.3" stroke-width="6"/>
+                <line x1="73.6" y1="-42.5" x2="108.3" y2="-62.5" stroke-width="6"/>
+                <line x1="85" y1="0" x2="125" y2="0" stroke-width="6"/>
+                <line x1="73.6" y1="42.5" x2="108.3" y2="62.5" stroke-width="6"/>
+                <line x1="42.5" y1="73.6" x2="62.5" y2="108.3" stroke-width="6"/>
+                <line x1="0" y1="85" x2="0" y2="125" stroke-width="6"/>
+                <line x1="-42.5" y1="73.6" x2="-62.5" y2="108.3" stroke-width="6"/>
+                <line x1="-73.6" y1="42.5" x2="-108.3" y2="62.5" stroke-width="6"/>
+                <line x1="-85" y1="0" x2="-125" y2="0" stroke-width="6"/>
+                <line x1="-73.6" y1="-42.5" x2="-108.3" y2="-62.5" stroke-width="6"/>
+                <line x1="-42.5" y1="-73.6" x2="-62.5" y2="-108.3" stroke-width="6"/>
+            </g>
+
+            <!-- 短射线 (每30度一根，偏移15度) -->
+            <g stroke="#C4956A" stroke-linecap="round">
+                <line x1="21.7" y1="-82.2" x2="32" y2="-110" stroke-width="4"/>
+                <line x1="60" y1="-60" x2="88" y2="-88" stroke-width="4"/>
+                <line x1="82.2" y1="-21.7" x2="110" y2="-32" stroke-width="4"/>
+                <line x1="82.2" y1="21.7" x2="110" y2="32" stroke-width="4"/>
+                <line x1="60" y1="60" x2="88" y2="88" stroke-width="4"/>
+                <line x1="21.7" y1="82.2" x2="32" y2="110" stroke-width="4"/>
+                <line x1="-21.7" y1="82.2" x2="-32" y2="110" stroke-width="4"/>
+                <line x1="-60" y1="60" x2="-88" y2="88" stroke-width="4"/>
+                <line x1="-82.2" y1="21.7" x2="-110" y2="32" stroke-width="4"/>
+                <line x1="-82.2" y1="-21.7" x2="-110" y2="-32" stroke-width="4"/>
+                <line x1="-60" y1="-60" x2="-88" y2="-88" stroke-width="4"/>
+                <line x1="-21.7" y1="-82.2" x2="-32" y2="-110" stroke-width="4"/>
+            </g>
+
+            <!-- Claude 的眼睛 -->
+            <circle cx="-18" cy="-10" r="8" fill="#1a1a1a"/>
+            <circle cx="18" cy="-10" r="8" fill="#1a1a1a"/>
+
+            <!-- Claude 的微笑 -->
+            <path d="M -25 15 Q 0 35 25 15" fill="none" stroke="#1a1a1a" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+
+        <div class="title">Claude</div>
+        <div class="subtitle">by Anthropic</div>
+    </div>
+</body>
+</html>
